@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>app_bridge</title>
+</head>
+<body>
+    <nav>
+        <a href='app_bridge_1.html'>open page 2</a>
+    </nav>
+    <div>
+        <h1>Page1</h1>
+        <div class="bridge-module bridge-history-back">
+            <p>测试history/back：页面回退</p>
+            <button id="btn_app_back">app back</button>
+        </div>
+        <div class="ua-content">
+            <h2>User-Agent</h2> <p id="userAgent"></p>
+        </div>
+        <div class="cookie-content">
+            <h2>Cookies</h2>
+            <p id="cookies"></p>
+        </div>
+        <div class="bridge-content">
+            <h2>Bridge功能</h2>
+            <div class="bridge-module bridge-scheme">
+                <p>测试Bridge是否能正确分发URL：</p>
+                <input type="text" id="test_bridge_dispatch_url_text" style="width: 80%;"/>
+                <input type="button" id="test_bridge_dispatch_url_btn" value="测试"/>
+                <p>结果：<span>...</span></p>
+            </div>
+            <div class="bridge-module bridge-app-env">
+                <p>测试app/env：获取app基础信息</p>
+                <p>结果：<span>...</span></p>
+                <button id="btn_get_app_env">get app env</button>
+            </div>
+            <div class="bridge-module bridge-app-available">
+                <p>测试app/available：获取app方法列表</p>
+                <p>结果：<span>...</span></p>
+                <button id="btn_get_app_available">get app available</button>
+            </div>
+            <div class="bridge-module bridge-loading-start">
+                <p>测试loading/start：显示loading</p>
+                <button id="btn_app_loading_start">app loading start</button>
+            </div>
+            <div class="bridge-module bridge-loading-stop">
+                <p>测试loading/stop：隐藏loading</p>
+                <button id="btn_app_loading_stop">app loading stop</button>
+            </div>
+            <div class="bridge-module bridge-toast-show">
+                <p>测试toast/show: 显示toast</p>
+                <input type="text" id="test_bridge_toast_text" style="width:80%;"/>
+                <button id="btn_show_app_toast">show toast</button>
+            </div>
+
+        </div>
+    </div>
+</body>
+<script>
+
+    /**
+     * appbridge初始化， 初始化事件和方法
+     */
+    // let iframe = getIframe()
+    let callbackList = []
+    window['VKAppBridge'] = {}
+    let vkappbridge = window.VKAppBridge
+    vkappbridge['receiveFromNative'] = function (res) {
+        res = JSON.parse(res);
+        console.log('recieve data:', res)
+        if (res.module) {
+            if (window.modules[res.module]) {
+                window.modules[res.module][res.method](res.data)
+            }
+            return
+        }
+        for (let index=0; index < callbackList.length; index++) {
+            if (callbackList[index].id === res.responseId) {
+                res.responseData.code !== 200 ? callbackList[index].reject(res.responseData) : callbackList[index].resolve(res.responseData)
+                callbackList.splice(index, 1)
+                break
+            }
+        }
+    }
+
+    var event = {
+        dispatch: function(data) {
+            if (data.target) {
+                console.log("clicked " + data.target)
+            }
+        }
+    }
+    window.modules = {}
+    window.modules['event'] = event;
+
+    function appExe(command) {
+        return new Promise((resolve, reject) => {
+            let callback = new URL(command)
+            if (callback.hash) {
+                callbackid = callback.hash.replace('#', '')
+                callbackList.push({id: callbackid, resolve:resolve, reject:reject})
+                console.log('push callback:', callback.hash)
+            }
+            let iframe = createIframe()
+            iframe.contentWindow.location.replace(command)
+        })
+    }
+
+    function getIframe () {
+        let appBridgeIframe = document.getElementById('appBridgeIframe')
+        if (!appBridgeIframe) {
+            appBridgeIframe = document.createElement('iframe')
+            appBridgeIframe.setAttribute('id', 'appBridgeIframe')
+            appBridgeIframe.style.visibility = 'hidden'
+            appBridgeIframe.style.height = '0'
+            appBridgeIframe.style.width = '0'
+            document.body.appendChild(appBridgeIframe)
+        }
+        return appBridgeIframe
+    }
+
+    function createIframe() {
+        let bridgeIframe = document.createElement('iframe');
+        bridgeIframe.style.visibility = 'invisible'
+        bridgeIframe.style.height = '0'
+        bridgeIframe.style.width = '0'
+        document.body.appendChild(bridgeIframe)
+        bridgeIframe.onload = function() {
+            document.body.removeChild(bridgeIframe)
+        }
+        return bridgeIframe
+    }
+
+    /**
+     * 页面功能
+     */
+    function openPage1 () {
+        console.log('openPage1:')
+        location.href = "app_bridge.html"
+    }
+
+    /**
+     * 页面功能
+     */
+    function openPage2 () {
+        console.log('openPage2:')
+        location.href = "app_bridge_1.html"
+    }
+
+    /**
+     * 页面功能
+     */
+    function appBack () {
+        // console.log('appBack:')
+        appExe("vkappbridge://app/openURL?url=app_bridge_1.html&target=_blank")
+        // history.back();
+    }
+
+    /**
+     * 页面功能
+     */
+    function getAppEnv () {
+        console.log('getAppEnv:')
+        let envResult = document.querySelector('.bridge-app-env span');
+        appExe("vkappbridge://app/env#"+ 'function_' + new Date().getTime())
+        .then(data => {
+            console.log('getAppEnv get Data:', data)
+                envResult.innerText = JSON.stringify(data.data);
+        }).catch(error => {
+            envResult.innerText = error.message;
+        });
+    }
+
+    /**
+     * 页面功能
+     */
+    function getAppAvailable () {
+        console.log('getAppAvailable:')
+        let availableResult = document.querySelector('.bridge-app-available span');
+        appExe("vkappbridge://app/available#"+ 'function_' + new Date().getTime())
+        .then(data => {
+            console.log('getAppAvailable get Data:', data)
+                availableResult.innerText = JSON.stringify(data.data);
+        }).catch(error => {
+            availableResult.innerText = error.message;
+        });
+    }
+    /**
+     * 页面功能
+     */
+     function loadingStart () {
+        console.log('loadingStart:')
+        appExe('vkappbridge://network/getNetworkType')
+    }
+    /**
+     * 页面功能
+     */
+     function loadingStop () {
+        console.log('loadingStop:')
+        appExe('vkappbridge://horizontal/getHorizontal')
+    }
+
+
+    /**
+     * 页面功能
+     */
+    function showToast () {
+        let toast = document.querySelector('#test_bridge_toast_text').value;
+        let duration = 3000
+        console.log('showToast:', toast, duration)
+        appExe(`vkappbridge://toast/show?text=${toast}&duration=${duration}`)
+    }
+
+function testBridgeDispatch() {
+    let dispatchUrl = document.querySelector("#test_bridge_dispatch_url_text").value;
+    let dispatchUrlResult = document.querySelector('#test_bridge_dispatch_url_text ~ p span');
+    appExe(`${dispatchUrl}#` + 'function_' + new Date().getTime()).then(data => {
+        dispatchUrlResult.innerText = "result: " + JSON.stringify(data.data);
+    }).catch(error => {
+        dispatchUrlResult.innerText = "error: " + error.message;
+    });
+}
+               
+   function readUA () {
+       document.querySelector("#userAgent").innerText = navigator.userAgent;
+   }
+
+   function ajax() {
+       fetch("https://httpbin.org/get").then(data=>{
+           return data.json()
+       }).then(data => {
+           document.querySelector("#cookies").innerText = JSON.stringify(data);
+       });
+   }
+
+   function hideNavBar() {
+    //    var params = {id: "rightItem", icon:"tab_selected_1@2x.png"}
+       var params = navItems("全选", "#333333")
+       var items = [params]
+       items = encodeURIComponent(JSON.stringify(items))
+       appExe("vkappbridge://navigationbar/setNavBarRightItems?items=" + items)
+   }
+
+   function navItems(title, titleColor, icon) {
+       var params = {title: title, titleColor: titleColor, id: "rightItem", icon: icon}
+       return params
+   }
+
+   readUA();
+
+   function readCookie () {
+   document.querySelector("#cookies").innerText = document.cookie;
+   }
+   
+   readCookie();
+   ajax();
+    /**
+     * 事件绑定
+     */
+    document.getElementById('btn_app_back').addEventListener('click', appBack)
+    document.getElementById('btn_get_app_env').addEventListener('click', getAppEnv)
+    document.getElementById('btn_get_app_available').addEventListener('click', getAppAvailable)
+    document.getElementById('btn_app_loading_start').addEventListener('click', loadingStart)
+    document.getElementById('btn_app_loading_stop').addEventListener('click', loadingStop)
+    document.getElementById('btn_show_app_toast').addEventListener('click', showToast)
+    document.getElementById('test_bridge_dispatch_url_btn').addEventListener('click', testBridgeDispatch);
+
+window.addEventListener('pageshow', function(){
+    console.log('page show');
+});
+
+window.addEventListener('pagehide', function(){
+    console.log('page hide');
+});
+               
+appExe("vkappbridge://__bridge_ready__")
+hideNavBar();               
+</script>
+</html>
